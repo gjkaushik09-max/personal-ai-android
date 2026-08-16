@@ -15,12 +15,11 @@ public class VoiceService extends Service {
     public void onCreate() {
         super.onCreate();
 
-        NotificationChannel channel =
-                new NotificationChannel(
-                        CHANNEL_ID,
-                        "Personal AI Voice",
-                        NotificationManager.IMPORTANCE_LOW
-                );
+        NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID,
+                "Personal AI Voice",
+                NotificationManager.IMPORTANCE_LOW
+        );
 
         NotificationManager manager =
                 getSystemService(NotificationManager.class);
@@ -32,17 +31,14 @@ public class VoiceService extends Service {
                         .setContentTitle("Personal AI")
                         .setContentText("Voice assistant is active 🎙️")
                         .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                        .setOngoing(true)
                         .build();
 
         startForeground(1, notification);
     }
 
     @Override
-    public int onStartCommand(
-            Intent intent,
-            int flags,
-            int startId
-    ) {
+    public int onStartCommand(Intent intent, int flags, int startId) {
         return START_STICKY;
     }
 

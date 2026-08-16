@@ -1,6 +1,7 @@
 package com.personalai;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
@@ -8,9 +9,7 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import androidx.appcompat.app.AppCompatActivity;
-
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends Activity {
 
     private static final int MIC_PERMISSION = 100;
 
@@ -31,6 +30,7 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
+
         layout.addView(title);
         layout.addView(start);
         layout.addView(stop);
@@ -42,7 +42,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startAI() {
-
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
 
@@ -50,12 +49,10 @@ public class MainActivity extends AppCompatActivity {
                     new String[]{Manifest.permission.RECORD_AUDIO},
                     MIC_PERMISSION
             );
-
             return;
         }
 
         Intent intent = new Intent(this, VoiceService.class);
-
         startForegroundService(intent);
     }
 
