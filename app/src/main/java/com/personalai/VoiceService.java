@@ -11,6 +11,7 @@ import android.os.IBinder;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
+import android.speech.tts.TextToSpeech;
 
 import com.personalai.learning.LearningEngine;
 
@@ -25,6 +26,16 @@ public class VoiceService extends Service {
     private Intent speechIntent;
     private LearningEngine learningEngine;
     private Handler handler;
+    private TextToSpeech textToSpeech;
+
+    private boolean listening = false;
+    private boolean shuttingDown = false;
+
+    private final Runnable autoStop = () -> {
+        if (listening && !shuttingDown) {
+            stopListening();
+        }
+    };
 
     @Override
     public void onCreate() {
@@ -34,6 +45,15 @@ public class VoiceService extends Service {
         learningEngine = new LearningEngine(this);
 
         createNotification();
+
+        textToSpeech = new TextToSpeech(
+                this,
+                status -> {
+                    if (status == TextToSpeech.SUCCESS) {
+                        textToSpeech.setLanguage(Locale.getDefault());
+                    }
+                }
+        );
 
         speechRecognizer =
                 SpeechRecognizer.createSpeechRecognizer(this);
@@ -53,106 +73,156 @@ public class VoiceService extends Service {
 
         speechIntent.putExtra(
                 RecognizerIntent.EXTRA_PARTIAL_RESULTS,
-                true
+                false
         );
 
         speechRecognizer.setRecognitionListener(
                 new RecognitionListener() {
 
-            @Override
-            public void onResults(Bundle results) {
+                    @Override
+                    public void onResults(Bundle results) {
 
-                ArrayList<String> matches =
-                        results.getStringArrayList(
-                                SpeechRecognizer.RESULTS_RECOGNITION
-                        );
+                        ArrayList<String> matches =
+                                results.getStringArrayList(
+                                        SpeechRecognizer.RESULTS_RECOGNITION
+                                );
 
-                if (matches != null && !matches.isEmpty()) {
+                        if (matches != null &&
+                                !matches.isEmpty()) {
 
-                    String command = matches.get(0);
+                            handleCommand(matches.get(0));
+                        }
 
-                    handleCommand(command);
+                        scheduleAutoStop();
+                    }
+
+                    @Override
+                    public void onError(int error) {
+                        scheduleAutoStop();
+                    }
+
+                    @Override
+                    public void onEndOfSpeech() {
+                        scheduleAutoStop();
+                    }
+
+                    @Override
+                    public void onReadyForSpeech(Bundle params) {
+                        listening = true;
+                    }
+
+                    @Override
+                    public void onBeginningOfSpeech() {
+                        handler.removeCallbacks(autoStop);
+                    }
+
+                    @Override
+                    public void onRmsChanged(float rmsdB) {}
+
+                    @Override
+                    public void onBufferReceived(byte[] buffer) {}
+
+                    @Override
+                    public void onPartialResults(Bundle partialResults) {}
+
+                    @Override
+                    public void onEvent(
+                            int eventType,
+                            Bundle params) {}
                 }
-
-                restartListening();
-            }
-
-            @Override
-            public void onError(int error) {
-                restartListening();
-            }
-
-            @Override
-            public void onEndOfSpeech() {
-                // Wait for results.
-            }
-
-            @Override public void onReadyForSpeech(Bundle params) {}
-            @Override public void onBeginningOfSpeech() {}
-            @Override public void onRmsChanged(float rmsdB) {}
-            @Override public void onBufferReceived(byte[] buffer) {}
-            @Override public void onPartialResults(Bundle partialResults) {}
-            @Override public void onEvent(int eventType, Bundle params) {}
-        });
+        );
 
         startListening();
     }
 
     private void startListening() {
 
-        if (speechRecognizer != null) {
-            speechRecognizer.startListening(speechIntent);
+        if (shuttingDown ||
+                speechRecognizer == null) {
+            return;
+        }
+
+        try {
+            handler.removeCallbacks(autoStop);
+
+            speechRecognizer.startListening(
+                    speechIntent
+            );
+
+            listening = true;
+
+        } catch (Exception ignored) {
         }
     }
 
-    private void restartListening() {
+    private void scheduleAutoStop() {
 
-        handler.postDelayed(() -> {
+        handler.removeCallbacks(autoStop);
 
-            if (speechRecognizer != null) {
-                startListening();
+        handler.postDelayed(
+                autoStop,
+                3000
+        );
+    }
+
+    private void stopListening() {
+
+        listening = false;
+
+        handler.removeCallbacks(autoStop);
+
+        if (speechRecognizer != null) {
+            try {
+                speechRecognizer.stopListening();
+            } catch (Exception ignored) {
             }
+        }
 
-        }, 3000);
+        stopSelf();
     }
 
     private void handleCommand(String command) {
 
-        if (command == null) return;
+        if (command == null) {
+            return;
+        }
 
         String lower =
                 command.toLowerCase(Locale.ROOT).trim();
 
-        // =========================
-        // LEARNING COMMAND
-        // =========================
+        if (lower.equals("બંધ") ||
+                lower.equals("stop") ||
+                lower.equals("stop listening")) {
+
+            speak("Okay, stopping.");
+
+            handler.postDelayed(
+                    this::stopListening,
+                    1200
+            );
+
+            return;
+        }
 
         if (lower.startsWith("learn ")) {
 
             String data = command.substring(6);
 
-            String[] parts = data.split("=", 2);
+            String[] parts =
+                    data.split("=", 2);
 
             if (parts.length == 2) {
 
-                String learnedCommand =
-                        parts[0].trim();
-
-                String action =
-                        parts[1].trim();
-
                 learningEngine.teach(
-                        learnedCommand,
-                        action
+                        parts[0].trim(),
+                        parts[1].trim()
                 );
+
+                speak("I learned that.");
             }
 
             return;
         }
-
-        // =========================
-        // LEARNED COMMAND
-        // =========================
 
         String learnedAction =
                 learningEngine.learn(command);
@@ -164,19 +234,17 @@ public class VoiceService extends Service {
             return;
         }
 
-        // =========================
-        // BUILT-IN COMMANDS
-        // =========================
-
         if (lower.contains("youtube") ||
                 lower.contains("યૂટ્યુબ")) {
 
+            speak("Opening YouTube.");
             openUrl(
                     "https://www.youtube.com"
             );
 
         } else if (lower.contains("google")) {
 
+            speak("Opening Google.");
             openUrl(
                     "https://www.google.com"
             );
@@ -191,21 +259,36 @@ public class VoiceService extends Service {
 
             if (intent != null) {
 
+                speak("Opening Chrome.");
+
                 intent.addFlags(
                         Intent.FLAG_ACTIVITY_NEW_TASK
                 );
 
                 startActivity(intent);
+
+            } else {
+                speak("Chrome is not installed.");
             }
+
+        } else {
+
+            speak(
+                    "I heard you, but I don't know that command yet."
+            );
         }
     }
 
     private void executeAction(String action) {
 
-        if (action == null) return;
+        if (action == null) {
+            return;
+        }
 
         if (action.equalsIgnoreCase(
                 "OPEN_YOUTUBE")) {
+
+            speak("Opening YouTube.");
 
             openUrl(
                     "https://www.youtube.com"
@@ -213,6 +296,8 @@ public class VoiceService extends Service {
 
         } else if (action.equalsIgnoreCase(
                 "OPEN_GOOGLE")) {
+
+            speak("Opening Google.");
 
             openUrl(
                     "https://www.google.com"
@@ -235,14 +320,27 @@ public class VoiceService extends Service {
         startActivity(intent);
     }
 
+    private void speak(String text) {
+
+        if (textToSpeech == null) {
+            return;
+        }
+
+        textToSpeech.speak(
+                text,
+                TextToSpeech.QUEUE_FLUSH,
+                null,
+                "jarvis_response"
+        );
+    }
+
     private void createNotification() {
 
         NotificationChannel channel =
                 new NotificationChannel(
                         CHANNEL_ID,
                         "Personal AI Voice",
-                        NotificationManager
-                                .IMPORTANCE_LOW
+                        NotificationManager.IMPORTANCE_LOW
                 );
 
         NotificationManager manager =
@@ -257,15 +355,12 @@ public class VoiceService extends Service {
                         this,
                         CHANNEL_ID
                 )
-                .setContentTitle(
-                        "Personal AI"
-                )
+                .setContentTitle("Personal AI")
                 .setContentText(
-                        "Listening for commands 🎙️"
+                        "Voice assistant active 🎙️"
                 )
                 .setSmallIcon(
-                        android.R.drawable
-                                .ic_btn_speak_now
+                        android.R.drawable.ic_btn_speak_now
                 )
                 .setOngoing(true)
                 .build();
@@ -279,6 +374,8 @@ public class VoiceService extends Service {
     @Override
     public void onDestroy() {
 
+        shuttingDown = true;
+
         if (handler != null) {
             handler.removeCallbacksAndMessages(null);
         }
@@ -286,6 +383,12 @@ public class VoiceService extends Service {
         if (speechRecognizer != null) {
             speechRecognizer.destroy();
             speechRecognizer = null;
+        }
+
+        if (textToSpeech != null) {
+            textToSpeech.stop();
+            textToSpeech.shutdown();
+            textToSpeech = null;
         }
 
         super.onDestroy();
@@ -297,8 +400,7 @@ public class VoiceService extends Service {
             int flags,
             int startId
     ) {
-
-        return START_STICKY;
+        return START_NOT_STICKY;
     }
 
     @Override

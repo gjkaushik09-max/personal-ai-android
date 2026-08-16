@@ -18,18 +18,25 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         TextView title = new TextView(this);
-        title.setText("🤖 Personal AI\n\nBackground Voice Assistant");
+        title.setText(
+                "🤖 Personal AI\n\n" +
+                "Voice Assistant"
+        );
         title.setTextSize(22);
         title.setPadding(40, 60, 40, 40);
 
         Button start = new Button(this);
-        start.setText("🎙️ Start Listening");
+        start.setText("🎙️ Start Jarvis");
 
         Button stop = new Button(this);
-        stop.setText("🛑 Stop Listening");
+        stop.setText("🛑 Stop Jarvis");
 
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout layout =
+                new LinearLayout(this);
+
+        layout.setOrientation(
+                LinearLayout.VERTICAL
+        );
 
         layout.addView(title);
         layout.addView(start);
@@ -37,26 +44,48 @@ public class MainActivity extends Activity {
 
         setContentView(layout);
 
-        start.setOnClickListener(v -> startAI());
-        stop.setOnClickListener(v -> stopAI());
+        start.setOnClickListener(
+                v -> startAI()
+        );
+
+        stop.setOnClickListener(
+                v -> stopAI()
+        );
     }
 
     private void startAI() {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED) {
+
+        if (checkSelfPermission(
+                Manifest.permission.RECORD_AUDIO
+        ) != PackageManager.PERMISSION_GRANTED) {
 
             requestPermissions(
-                    new String[]{Manifest.permission.RECORD_AUDIO},
+                    new String[]{
+                            Manifest.permission.RECORD_AUDIO
+                    },
                     MIC_PERMISSION
             );
+
             return;
         }
 
-        Intent intent = new Intent(this, VoiceService.class);
+        Intent intent =
+                new Intent(
+                        this,
+                        VoiceService.class
+                );
+
         startForegroundService(intent);
     }
 
     private void stopAI() {
-        stopService(new Intent(this, VoiceService.class));
+
+        Intent intent =
+                new Intent(
+                        this,
+                        VoiceService.class
+                );
+
+        stopService(intent);
     }
 }
