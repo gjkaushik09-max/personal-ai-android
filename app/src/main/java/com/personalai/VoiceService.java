@@ -15,6 +15,7 @@ import android.speech.tts.TextToSpeech;
 
 import com.personalai.apps.AppLauncher;
 import com.personalai.learning.LearningEngine;
+import com.personalai.command.CommandEngine;
 
 import java.util.ArrayList;
 import java.util.Locale;
@@ -29,6 +30,7 @@ public class VoiceService extends Service {
 
     private LearningEngine learningEngine;
     private AppLauncher appLauncher;
+    private CommandEngine commandEngine;
 
     private Handler handler;
     private TextToSpeech textToSpeech;
@@ -53,6 +55,7 @@ public class VoiceService extends Service {
 
         appLauncher =
                 new AppLauncher(this);
+        commandEngine = new CommandEngine();
 
         createNotification();
 
@@ -244,6 +247,19 @@ public class VoiceService extends Service {
                         .toLowerCase(Locale.ROOT)
                         .trim();
 
+        CommandEngine.Command parsed =
+                commandEngine.parse(command);
+
+        if (parsed.type == CommandEngine.Type.CALCULATE) {
+            calculateExpression(command);
+            return;
+        }
+
+        if (parsed.type == CommandEngine.Type.WEB_SEARCH) {
+            searchWeb(command);
+            return;
+        }
+
         /*
          * =========================
          * STOP COMMAND
@@ -412,6 +428,93 @@ public class VoiceService extends Service {
         speak(
                 "I heard you, but I don't know that command yet."
         );
+    }
+
+    private void calculateExpression(String input) {
+        String expression = input
+                .replace("calculate", "")
+                .replace("calculator", "")
+                .replace("કેટલા", "")
+                .replace("ગણતરી", "")
+                .replace("?", "")
+                .replace("×", "*")
+                .replace("÷", "/")
+                .trim();
+
+        try {
+            double result = evaluateSimpleExpression(expression);
+
+            if (result == Math.floor(result)) {
+                speak(String.valueOf((long) result));
+            } else {
+                speak(String.valueOf(result));
+            }
+        } catch (Exception e) {
+            speak("I could not calculate that.");
+        }
+    }
+
+    private double evaluateSimpleExpression(String expression) {
+        String value = expression.replace(" ", "");
+
+        int plus = value.indexOf('+');
+        if (plus > 0) {
+            return Double.parseDouble(value.substring(0, plus))
+                    + Double.parseDouble(value.substring(plus + 1));
+        }
+
+        int multiply = value.indexOf('*');
+        if (multiply > 0) {
+            return Double.parseDouble(value.substring(0, multiply))
+                    * Double.parseDouble(value.substring(multiply + 1));
+        }
+
+        int divide = value.indexOf('/');
+        if (divide > 0) {
+            double divisor =
+                    Double.parseDouble(value.substring(divide + 1));
+
+            if (divisor == 0) {
+                throw new ArithmeticException("Division by zero");
+            }
+
+            return Double.parseDouble(value.substring(0, divide))
+                    / divisor;
+        }
+
+        int minus = value.indexOf('-', 1);
+        if (minus > 0) {
+            return Double.parseDouble(value.substring(0, minus))
+                    - Double.parseDouble(value.substring(minus + 1));
+        }
+
+        return Double.parseDouble(value);
+    }
+
+    private void searchWeb(String input) {
+        String query = input
+                .replaceFirst("(?i)^search\\s+", "")
+                .replaceFirst("(?i)^google\\s+", "")
+                .replaceFirst("(?i)^find\\s+", "")
+                .trim();
+
+        if (query.isEmpty()) {
+            speak("What should I search?");
+            return;
+        }
+
+        speak("Searching.");
+
+        Intent intent = new Intent(
+                Intent.ACTION_VIEW,
+                android.net.Uri.parse(
+                        "https://www.google.com/search?q="
+                                + android.net.Uri.encode(query)
+                )
+        );
+
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
     }
 
     private String extractAppName(
